@@ -6,7 +6,7 @@ function App() {
   let sessionContainer: HTMLDivElement | null = null;
   // set your auth endpoint here
   // a sample is available here: https://github.com/zoom/videosdk-auth-endpoint-sample
-  const authEndpoint = ""; // http://localhost:4000
+  const authEndpoint = "https://be.di-ichi.edu.vn/zoom-token"; // http://localhost:4000
   const config: CustomizationOptions = {
     videoSDKJWT: "",
     sessionName: "test",
@@ -28,43 +28,67 @@ function App() {
   };
   const role = 1;
 
-  function getVideoSDKJWT() {
+  async function getVideoSDKJWT() {
     sessionContainer = document.getElementById(
-      "sessionContainer"
+      "sessionContainer",
     ) as HTMLDivElement;
-    document.getElementById("join-flow")!.style.display = "none";
-    fetch(authEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionName: config.sessionName,
-        role: role,
-        videoWebRtcMode: 1,
-      }),
-    })
-      .then((response) => {
-        return response.json();
-      })
-      .then((data) => {
-        if (data.signature) {
-          console.log(data.signature);
-          config.videoSDKJWT = data.signature;
-          joinSession();
-        } else {
-          console.log(data);
-        }
-      })
-      .catch((error) => {
-        console.log(error);
+
+    try {
+      const response = await fetch(authEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ZWU1ZDZkMC04YjJiLTQ3OGUtODliMy1kY2YxNmY3MGFjYmEiLCJ1c2VyVHlwZSI6IkFETUlOIiwiZGV2aWNlSWQiOiI0OWFkMGRkMC1kYTlmLTRhY2UtYjkxZi01OTdmNWRhZWVmYjQiLCJpYXQiOjE3ODY2NzM3NTksImV4cCI6MTc4OTI2NTc1OX0.HmO7ukwOkIDFsBdfQghw3vhgX1HVwFpkuIgHBhTMT0A",
+        },
+        body: JSON.stringify({
+          sessionName: config.sessionName,
+          role,
+          userIdentity: config.userName,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Zoom response:", result);
+
+      const token = result.data?.token;
+
+      if (!token) {
+        throw new Error("Backend không trả về Video SDK token");
+      }
+
+      config.videoSDKJWT = token;
+      document.getElementById("join-flow")!.style.display = "none";
+
+      await joinSession();
+    } catch (error) {
+      console.error("Zoom token error:", error);
+      document.getElementById("join-flow")!.style.display = "block";
+    }
   }
 
-  function joinSession() {
-    console.log(config);
-    if (sessionContainer) {
-      uitoolkit.joinSession(sessionContainer, config);
-      sessionContainer && uitoolkit.onSessionClosed(sessionClosed);
+  async function joinSession() {
+    if (!sessionContainer) {
+      console.error("Không tìm thấy sessionContainer");
+      return;
+    }
+
+    try {
+      console.log("Joining Zoom...", config);
+
+      await uitoolkit.joinSession(sessionContainer, config);
+
+      uitoolkit.onSessionClosed(sessionClosed);
       uitoolkit.onSessionDestroyed(sessionDestroyed);
+
+      console.log("Zoom joined");
+    } catch (error) {
+      console.error("Zoom join error:", error);
+      document.getElementById("join-flow")!.style.display = "block";
     }
   }
 
